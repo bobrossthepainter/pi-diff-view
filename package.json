@@ -6,7 +6,7 @@
   "scripts": {
     "bridge": "node ./bin/pi-diff-review-bridge.mjs --docker",
     "check": "tsgo --noEmit",
-    "prepare": "husky"
+    "prepare": "node ./scripts/prepare.mjs"
   },
   "bin": {
     "pi-diff-review-bridge": "./bin/pi-diff-review-bridge.mjs",
