@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
-import { open, type GlimpseWindow } from "glimpseui";
 import { getReviewWindowData, loadReviewFileContents } from "./git.js";
+import { openReviewWindow, type ReviewWindow } from "./review-window.js";
 import { composeReviewPrompt } from "./prompt.js";
 import type {
   ReviewCancelPayload,
@@ -33,7 +33,7 @@ function escapeForInlineScript(value: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  let activeWindow: GlimpseWindow | null = null;
+  let activeWindow: ReviewWindow | null = null;
   let activeWaitingUIDismiss: (() => void) | null = null;
 
   function closeActiveWindow(): void {
@@ -124,11 +124,18 @@ export default function (pi: ExtensionAPI) {
     }
 
     const html = buildReviewHtml({ repoRoot, files, commits });
-    const window = open(html, {
-      width: 1680,
-      height: 1020,
-      title: "pi review",
-    });
+    let window: ReviewWindow;
+    try {
+      window = await openReviewWindow(html, {
+        width: 1680,
+        height: 1020,
+        title: "pi review",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.ui.notify(`Review failed: ${message}`, "error");
+      return;
+    }
     activeWindow = window;
 
     const waitingUI = showWaitingUI(ctx);
@@ -272,12 +279,15 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  pi.registerCommand("diff-review", {
+  const diffReviewCommand = {
     description: "Open a native review window with git diff, last commit, and all files scopes",
-    handler: async (_args, ctx) => {
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
       await reviewRepository(ctx);
     },
-  });
+  };
+
+  pi.registerCommand("diff-review", diffReviewCommand);
+  pi.registerCommand("diff-view", diffReviewCommand);
 
   pi.on("session_shutdown", async () => {
     activeWaitingUIDismiss?.();

@@ -4,15 +4,20 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "bridge": "node ./bin/pi-diff-review-bridge.mjs --docker",
     "check": "tsgo --noEmit",
     "prepare": "husky"
+  },
+  "bin": {
+    "pi-diff-review-bridge": "./bin/pi-diff-review-bridge.mjs",
+    "pi-diff-view-bridge": "./bin/pi-diff-review-bridge.mjs"
   },
   "pi": {
     "extensions": [
       "./src/index.ts"
     ]
   },
-  "dependencies": {
+  "optionalDependencies": {
     "glimpseui": "^0.8.1"
   },
   "peerDependencies": {

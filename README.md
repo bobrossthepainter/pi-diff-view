@@ -12,7 +12,7 @@ pi install git:https://github.com/badlogic/pi-diff-review
 
 ## What it does
 
-Adds a `/diff-review` command to pi.
+Adds `/diff-review` and `/diff-view` commands to pi.
 
 The command:
 
@@ -30,6 +30,30 @@ The command:
 - Node.js 20+
 - `pi` installed
 - internet access for the Tailwind and Monaco CDNs used by the review window
+
+## Docker on macOS
+
+Glimpse opens a real native window, so a Linux Docker container cannot draw it directly on macOS. Run the small bridge on the Mac host and let the pi extension in the container talk to it over TCP.
+
+On the Mac host, from this package checkout/install:
+
+```bash
+npm install
+export PI_DIFF_REVIEW_BRIDGE_TOKEN="$(openssl rand -hex 16)"
+npm run bridge
+# or: pi-diff-review-bridge --docker
+```
+
+Inside the container/persistent pi harness environment:
+
+```bash
+export PI_DIFF_REVIEW_BRIDGE=host.docker.internal:7777
+export PI_DIFF_REVIEW_BRIDGE_TOKEN="<same token>"
+```
+
+Then run `/diff-view` or `/diff-review` in pi. The extension also auto-tries `host.docker.internal:7777` when it detects it is running in a container. Set `PI_DIFF_REVIEW_BRIDGE=0` to force local Glimpse instead.
+
+For older env naming, `PI_DIFF_VIEW_BRIDGE*` aliases are also accepted.
 
 ### Windows notes
 
