@@ -33,27 +33,47 @@ The command:
 
 ## Docker on macOS
 
-Glimpse opens a real native window, so a Linux Docker container cannot draw it directly on macOS. Run the small bridge on the Mac host and let the pi extension in the container talk to it over TCP.
+Glimpse opens a real native window, so a Linux Docker container cannot draw it directly on macOS. This package includes **glimpse-relay**, a small generic host relay that lets containerized code open Glimpse windows on the Mac host over TCP.
 
-On the Mac host, from this package checkout/install:
+One-time setup on the Mac host, from this package checkout/install:
 
 ```bash
 npm install
-export PI_DIFF_REVIEW_BRIDGE_TOKEN="$(openssl rand -hex 16)"
-npm run bridge
-# or: pi-diff-review-bridge --docker
+npm run relay:install
 ```
+
+That installs a user LaunchAgent (`dev.glimpse-relay`) so the relay starts at login, keeps running, generates `~/.glimpse-relay-token`, and builds the Glimpse macOS host binary if needed.
 
 Inside the container/persistent pi harness environment:
 
 ```bash
-export PI_DIFF_REVIEW_BRIDGE=host.docker.internal:7777
-export PI_DIFF_REVIEW_BRIDGE_TOKEN="<same token>"
+export GLIMPSE_RELAY=host.docker.internal:7777
+export GLIMPSE_RELAY_TOKEN_FILE=/Users/<you>/.glimpse-relay-token
 ```
 
-Then run `/diff-view` or `/diff-review` in pi. The extension also auto-tries `host.docker.internal:7777` when it detects it is running in a container. Set `PI_DIFF_REVIEW_BRIDGE=0` to force local Glimpse instead.
+`npm run relay:install` prints the exact env lines for your machine.
 
-For older env naming, `PI_DIFF_VIEW_BRIDGE*` aliases are also accepted.
+If that host token file is not mounted in the container, use the token value instead:
+
+```bash
+export GLIMPSE_RELAY_TOKEN="$(cat ~/.glimpse-relay-token)"
+```
+
+Then run `/diff-view` or `/diff-review` in pi. The extension also auto-tries `host.docker.internal:7777` when it detects it is running in a container. Set `GLIMPSE_RELAY=0` to force local Glimpse instead.
+
+Relay helpers:
+
+```bash
+npm run relay:status
+npm run relay:env
+npm run relay:uninstall
+```
+
+The old `bridge:*` scripts and `PI_DIFF_REVIEW_BRIDGE*` / `PI_DIFF_VIEW_BRIDGE*` env vars still work as aliases.
+
+### Using glimpse-relay for other Glimpse UIs
+
+The relay protocol is generic: clients send `open`, `send`, `set-html`, `show`, `load-file`, `get-info`, `follow-cursor`, and `close` JSON-lines messages; the host forwards Glimpse `ready`, `message`, `info`, `closed`, and `error` events back. The diff review window uses `src/glimpse-relay.ts`, which exposes a Glimpse-like `open()` / `openGlimpseWindow()` helper.
 
 ### Windows notes
 

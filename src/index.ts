@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { getReviewWindowData, loadReviewFileContents } from "./git.js";
-import { openReviewWindow, type ReviewWindow } from "./review-window.js";
+import { openGlimpseWindow, type GlimpseRelayWindow } from "./glimpse-relay.js";
 import { composeReviewPrompt } from "./prompt.js";
 import type {
   ReviewCancelPayload,
@@ -33,7 +33,7 @@ function escapeForInlineScript(value: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  let activeWindow: ReviewWindow | null = null;
+  let activeWindow: GlimpseRelayWindow | null = null;
   let activeWaitingUIDismiss: (() => void) | null = null;
 
   function closeActiveWindow(): void {
@@ -124,9 +124,9 @@ export default function (pi: ExtensionAPI) {
     }
 
     const html = buildReviewHtml({ repoRoot, files, commits });
-    let window: ReviewWindow;
+    let window: GlimpseRelayWindow;
     try {
-      window = await openReviewWindow(html, {
+      window = await openGlimpseWindow(html, {
         width: 1680,
         height: 1020,
         title: "pi review",
