@@ -1,10 +1,6 @@
-declare module "glimpseui" {
-  import { EventEmitter } from "node:events";
-
-  export type FollowMode = "snap" | "spring";
-  export type CursorAnchor = "top-left" | "top-right" | "right" | "bottom-right" | "bottom-left" | "left";
-
-  export interface GlimpseOpenOptions {
+export type FollowMode = "snap" | "spring";
+export type CursorAnchor = "top-left" | "top-right" | "right" | "bottom-right" | "bottom-left" | "left";
+export interface GlimpseRelayOpenOptions {
     width?: number;
     height?: number;
     title?: string;
@@ -18,15 +14,14 @@ declare module "glimpseui" {
     followMode?: FollowMode;
     cursorAnchor?: CursorAnchor;
     cursorOffset?: {
-      x?: number;
-      y?: number;
+        x?: number;
+        y?: number;
     };
     hidden?: boolean;
     autoClose?: boolean;
     timeout?: number;
-  }
-
-  export interface GlimpseScreenInfo {
+}
+export interface GlimpseScreenInfo {
     width: number;
     height: number;
     scaleFactor: number;
@@ -36,34 +31,29 @@ declare module "glimpseui" {
     visibleHeight?: number;
     x?: number;
     y?: number;
-  }
-
-  export interface GlimpseAppearanceInfo {
+}
+export interface GlimpseAppearanceInfo {
     darkMode: boolean;
     accentColor: string;
     reduceMotion: boolean;
     increaseContrast: boolean;
-  }
-
-  export interface GlimpseCursorInfo {
+}
+export interface GlimpseCursorInfo {
     x: number;
     y: number;
-  }
-
-  export interface GlimpseCursorTip {
+}
+export interface GlimpseCursorTip {
     x: number;
     y: number;
-  }
-
-  export interface GlimpseInfo {
+}
+export interface GlimpseInfo {
     screen: GlimpseScreenInfo;
     screens: GlimpseScreenInfo[];
     appearance: GlimpseAppearanceInfo;
     cursor: GlimpseCursorInfo;
     cursorTip: GlimpseCursorTip | null;
-  }
-
-  export class GlimpseWindow extends EventEmitter {
+}
+export interface GlimpseRelayWindow {
     on(event: "ready", listener: (info: GlimpseInfo) => void): this;
     on(event: "message", listener: (data: unknown) => void): this;
     on(event: "info", listener: (info: GlimpseInfo) => void): this;
@@ -74,16 +64,22 @@ declare module "glimpseui" {
     once(event: "info", listener: (info: GlimpseInfo) => void): this;
     once(event: "closed", listener: () => void): this;
     once(event: "error", listener: (error: Error) => void): this;
+    removeListener(event: "ready", listener: (info: GlimpseInfo) => void): this;
+    removeListener(event: "message", listener: (data: unknown) => void): this;
+    removeListener(event: "info", listener: (info: GlimpseInfo) => void): this;
+    removeListener(event: "closed", listener: () => void): this;
+    removeListener(event: "error", listener: (error: Error) => void): this;
     send(js: string): void;
     setHTML(html: string): void;
-    show(options?: { title?: string }): void;
+    show(options?: {
+        title?: string;
+    }): void;
     close(): void;
     loadFile(path: string): void;
     get info(): GlimpseInfo | null;
     getInfo(): void;
     followCursor(enabled: boolean, anchor?: CursorAnchor, mode?: FollowMode): void;
-  }
-
-  export function open(html: string, options?: GlimpseOpenOptions): GlimpseWindow;
-  export function prompt<T = unknown>(html: string, options?: GlimpseOpenOptions): Promise<T | null>;
 }
+export declare function openGlimpseWindow(html: string, options?: GlimpseRelayOpenOptions): Promise<GlimpseRelayWindow>;
+export { openGlimpseWindow as open };
+//# sourceMappingURL=index.d.ts.map

@@ -1,8 +1,26 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import net from "node:net";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const DEFAULT_PORT = 7777;
+const LAUNCH_AGENT_COMMANDS = new Set(["install", "uninstall", "status", "env"]);
+
+function runLaunchAgentCommand(args) {
+  const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts", "glimpse-relay-launch-agent.mjs");
+  const result = spawnSync(process.execPath, [scriptPath, ...args], { stdio: "inherit" });
+  if (result.error != null) {
+    console.error(result.error.message);
+    process.exit(1);
+  }
+  process.exit(result.status ?? 0);
+}
+
+if (LAUNCH_AGENT_COMMANDS.has(process.argv[2])) {
+  runLaunchAgentCommand(process.argv.slice(2));
+}
 
 function printHelp() {
   console.log(`glimpse-relay
@@ -11,6 +29,10 @@ Runs a host-side Glimpse relay so processes in Docker/VMs can open native Glimps
 
 Usage:
   glimpse-relay [--docker] [--host <address>] [--port <port>] [--token <token>]
+  glimpse-relay install [--port <port>]
+  glimpse-relay status
+  glimpse-relay env
+  glimpse-relay uninstall
 
 Options:
   --docker              Bind 0.0.0.0 so Docker Desktop containers can connect via host.docker.internal.

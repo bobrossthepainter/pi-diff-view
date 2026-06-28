@@ -1,14 +1,73 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
-import type { CursorAnchor, FollowMode, GlimpseInfo, GlimpseOpenOptions, GlimpseWindow } from "glimpseui";
 
 const DEFAULT_CONTAINER_RELAY_HOST = "host.docker.internal";
 const DEFAULT_LOCAL_RELAY_HOST = "127.0.0.1";
 const DEFAULT_RELAY_PORT = 7777;
 const DEFAULT_RELAY_TIMEOUT_MS = 2500;
 
-export type GlimpseRelayOpenOptions = GlimpseOpenOptions;
+export type FollowMode = "snap" | "spring";
+export type CursorAnchor = "top-left" | "top-right" | "right" | "bottom-right" | "bottom-left" | "left";
+
+export interface GlimpseRelayOpenOptions {
+  width?: number;
+  height?: number;
+  title?: string;
+  x?: number;
+  y?: number;
+  frameless?: boolean;
+  floating?: boolean;
+  transparent?: boolean;
+  clickThrough?: boolean;
+  followCursor?: boolean;
+  followMode?: FollowMode;
+  cursorAnchor?: CursorAnchor;
+  cursorOffset?: {
+    x?: number;
+    y?: number;
+  };
+  hidden?: boolean;
+  autoClose?: boolean;
+  timeout?: number;
+}
+
+export interface GlimpseScreenInfo {
+  width: number;
+  height: number;
+  scaleFactor: number;
+  visibleX?: number;
+  visibleY?: number;
+  visibleWidth?: number;
+  visibleHeight?: number;
+  x?: number;
+  y?: number;
+}
+
+export interface GlimpseAppearanceInfo {
+  darkMode: boolean;
+  accentColor: string;
+  reduceMotion: boolean;
+  increaseContrast: boolean;
+}
+
+export interface GlimpseCursorInfo {
+  x: number;
+  y: number;
+}
+
+export interface GlimpseCursorTip {
+  x: number;
+  y: number;
+}
+
+export interface GlimpseInfo {
+  screen: GlimpseScreenInfo;
+  screens: GlimpseScreenInfo[];
+  appearance: GlimpseAppearanceInfo;
+  cursor: GlimpseCursorInfo;
+  cursorTip: GlimpseCursorTip | null;
+}
 
 export interface GlimpseRelayWindow {
   on(event: "ready", listener: (info: GlimpseInfo) => void): this;
@@ -59,12 +118,9 @@ function parseBoolean(value: string): boolean | null {
   return null;
 }
 
-function envValue(...names: string[]): string | undefined {
-  for (const name of names) {
-    const value = process.env[name];
-    if (value != null && value.trim().length > 0) return value.trim();
-  }
-  return undefined;
+function envValue(name: string): string | undefined {
+  const value = process.env[name];
+  return value != null && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function relayEnvValue(name: "" | "_HOST" | "_PORT" | "_TIMEOUT_MS" | "_TOKEN" | "_TOKEN_FILE"): string | undefined {
@@ -119,10 +175,12 @@ function endpointFromValue(value: string, fallbackHost: string, fallbackPort: nu
   return { host, port, token };
 }
 
-function getRelayConfig(): RelayConfig | null {
+function getRelayConfig(): RelayConfig {
   const relayValue = relayEnvValue("");
   const relayBoolean = relayValue == null ? null : parseBoolean(relayValue);
-  if (relayBoolean === false) return null;
+  if (relayBoolean === false) {
+    throw new Error("Glimpse relay is disabled by GLIMPSE_RELAY=0.");
+  }
 
   const runningInContainer = isProbablyContainer();
   const timeoutMs = parsePositiveInteger(
@@ -146,17 +204,13 @@ function getRelayConfig(): RelayConfig | null {
     };
   }
 
-  if (relayBoolean === true || runningInContainer) {
-    return {
-      host: fallbackHost,
-      port: fallbackPort,
-      token: envToken,
-      timeoutMs,
-      source: relayBoolean === true ? "GLIMPSE_RELAY" : "container auto-detect",
-    };
-  }
-
-  return null;
+  return {
+    host: fallbackHost,
+    port: fallbackPort,
+    token: envToken,
+    timeoutMs,
+    source: relayBoolean === true ? "GLIMPSE_RELAY" : runningInContainer ? "container auto-detect" : "default localhost",
+  };
 }
 
 function writeJsonLine(socket: net.Socket, message: unknown): void {
@@ -373,29 +427,14 @@ async function openRemoteGlimpseWindow(html: string, options: GlimpseRelayOpenOp
   return window;
 }
 
-async function openNativeGlimpseWindow(html: string, options: GlimpseRelayOpenOptions): Promise<GlimpseRelayWindow> {
-  let glimpse: typeof import("glimpseui");
-  try {
-    glimpse = await import("glimpseui");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not load glimpseui locally: ${message}`);
-  }
-  return glimpse.open(html, options) as GlimpseWindow;
-}
-
 export async function openGlimpseWindow(html: string, options: GlimpseRelayOpenOptions = {}): Promise<GlimpseRelayWindow> {
   const relayConfig = getRelayConfig();
-  if (relayConfig != null) {
-    try {
-      return await openRemoteGlimpseWindow(html, options, relayConfig);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`${message}\nStart the host relay on macOS, for example: glimpse-relay --docker, or set GLIMPSE_RELAY=0 to force local Glimpse.`);
-    }
+  try {
+    return await openRemoteGlimpseWindow(html, options, relayConfig);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}\nStart the host relay first, for example: glimpse-relay install or glimpse-relay --docker.`);
   }
-
-  return openNativeGlimpseWindow(html, options);
 }
 
 export { openGlimpseWindow as open };

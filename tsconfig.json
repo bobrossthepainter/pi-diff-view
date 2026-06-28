@@ -1,14 +1,7 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "types": ["node"]
-  },
-  "include": ["src/**/*.ts", "types/**/*.d.ts"]
+  "files": [],
+  "references": [
+    { "path": "./packages/glimpse-relay-client" },
+    { "path": "./packages/pi-diff-view" }
+  ]
 }

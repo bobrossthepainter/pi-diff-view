@@ -1,38 +1,35 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const LABEL = "dev.glimpse-relay";
-const LEGACY_LABEL = "dev.pi-diff-review.bridge";
 const DEFAULT_PORT = 7777;
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const home = os.homedir();
 const launchAgentsDir = join(home, "Library", "LaunchAgents");
 const logsDir = join(home, "Library", "Logs");
 const plistPath = join(launchAgentsDir, `${LABEL}.plist`);
-const legacyPlistPath = join(launchAgentsDir, `${LEGACY_LABEL}.plist`);
 const defaultTokenPath = join(home, ".glimpse-relay-token");
-const legacyTokenPath = join(home, ".pi-diff-review-bridge-token");
 const tokenPath = process.env.GLIMPSE_RELAY_TOKEN_FILE || defaultTokenPath;
 
 function usage() {
   console.log(`glimpse-relay launch agent
 
 Usage:
+  glimpse-relay install [--port 7777]
+  glimpse-relay uninstall
+  glimpse-relay status
+  glimpse-relay env
+
+Package scripts:
   npm run relay:install [-- --port 7777]
   npm run relay:uninstall
   npm run relay:status
   npm run relay:env
-
-Direct:
-  node ./scripts/glimpse-relay-launch-agent.mjs install [--port 7777]
-  node ./scripts/glimpse-relay-launch-agent.mjs uninstall
-  node ./scripts/glimpse-relay-launch-agent.mjs status
-  node ./scripts/glimpse-relay-launch-agent.mjs env
 `);
 }
 
@@ -103,8 +100,8 @@ function uid() {
   return String(process.getuid?.() ?? run("id", ["-u"], { stdio: "pipe" }).stdout.trim());
 }
 
-function serviceName(label = LABEL) {
-  return `gui/${uid()}/${label}`;
+function serviceName() {
+  return `gui/${uid()}/${LABEL}`;
 }
 
 function ensureMacOS() {
@@ -115,11 +112,7 @@ function ensureMacOS() {
 
 function ensureTokenFile() {
   if (!existsSync(tokenPath)) {
-    if (tokenPath === defaultTokenPath && existsSync(legacyTokenPath)) {
-      copyFileSync(legacyTokenPath, tokenPath);
-    } else {
-      writeFileSync(tokenPath, `${randomBytes(16).toString("hex")}\n`, { mode: 0o600 });
-    }
+    writeFileSync(tokenPath, `${randomBytes(16).toString("hex")}\n`, { mode: 0o600 });
     chmodSync(tokenPath, 0o600);
     return;
   }
@@ -182,12 +175,6 @@ function plistXml(port) {
 `;
 }
 
-function stopAndRemoveLegacyAgent() {
-  run("launchctl", ["bootout", `gui/${uid()}`, legacyPlistPath], { allowFailure: true });
-  run("launchctl", ["disable", serviceName(LEGACY_LABEL)], { allowFailure: true });
-  rmSync(legacyPlistPath, { force: true });
-}
-
 function install(port) {
   ensureMacOS();
   ensureTokenFile();
@@ -196,7 +183,6 @@ function install(port) {
   mkdirSync(logsDir, { recursive: true });
   writeFileSync(plistPath, plistXml(port), "utf8");
 
-  stopAndRemoveLegacyAgent();
   run("launchctl", ["bootout", `gui/${uid()}`, plistPath], { allowFailure: true });
   run("launchctl", ["bootstrap", `gui/${uid()}`, plistPath]);
   run("launchctl", ["enable", serviceName()], { allowFailure: true });
@@ -211,7 +197,6 @@ function uninstall() {
   run("launchctl", ["bootout", `gui/${uid()}`, plistPath], { allowFailure: true });
   run("launchctl", ["disable", serviceName()], { allowFailure: true });
   rmSync(plistPath, { force: true });
-  stopAndRemoveLegacyAgent();
   console.log(`Uninstalled ${LABEL}`);
   console.log(`Token file left in place: ${tokenPath}`);
 }

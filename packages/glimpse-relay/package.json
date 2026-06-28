@@ -1,0 +1,39 @@
+{
+  "name": "@bobrossthepainter/glimpse-relay",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Host-side relay for opening native Glimpse windows from Docker or VM clients",
+  "keywords": [
+    "glimpse",
+    "webview",
+    "docker",
+    "relay"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/bobrossthepainter/pi-diff-view.git",
+    "directory": "packages/glimpse-relay"
+  },
+  "bin": {
+    "glimpse-relay": "./bin/glimpse-relay.mjs"
+  },
+  "scripts": {
+    "relay": "node ./bin/glimpse-relay.mjs --docker",
+    "relay:install": "node ./bin/glimpse-relay.mjs install",
+    "relay:uninstall": "node ./bin/glimpse-relay.mjs uninstall",
+    "relay:status": "node ./bin/glimpse-relay.mjs status",
+    "relay:env": "node ./bin/glimpse-relay.mjs env",
+    "check": "node --check ./bin/glimpse-relay.mjs && node --check ./scripts/glimpse-relay-launch-agent.mjs"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "README.md"
+  ],
+  "dependencies": {
+    "glimpseui": "^0.8.1"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

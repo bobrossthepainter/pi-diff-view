@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { getReviewWindowData, loadReviewFileContents } from "./git.js";
-import { openGlimpseWindow, type GlimpseRelayWindow } from "./glimpse-relay.js";
+import { openGlimpseWindow, type GlimpseRelayWindow } from "@bobrossthepainter/glimpse-relay-client";
 import { composeReviewPrompt } from "./prompt.js";
 import type {
   ReviewCancelPayload,

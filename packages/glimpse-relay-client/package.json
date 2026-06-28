@@ -1,0 +1,36 @@
+{
+  "name": "@bobrossthepainter/glimpse-relay-client",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Pure Node client for talking to glimpse-relay",
+  "keywords": [
+    "glimpse",
+    "docker",
+    "relay",
+    "client"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/bobrossthepainter/pi-diff-view.git",
+    "directory": "packages/glimpse-relay-client"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

@@ -1,30 +1,21 @@
 {
-  "name": "pi-diff-review",
+  "name": "pi-diff-view-monorepo",
   "private": true,
   "version": "0.2.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "relay": "node ./bin/glimpse-relay.mjs --docker",
-    "relay:install": "node ./scripts/glimpse-relay-launch-agent.mjs install",
-    "relay:uninstall": "node ./scripts/glimpse-relay-launch-agent.mjs uninstall",
-    "relay:status": "node ./scripts/glimpse-relay-launch-agent.mjs status",
-    "relay:env": "node ./scripts/glimpse-relay-launch-agent.mjs env",
-    "check": "tsgo --noEmit",
-    "prepare": "node ./scripts/prepare.mjs"
-  },
-  "bin": {
-    "glimpse-relay": "./bin/glimpse-relay.mjs"
-  },
-  "pi": {
-    "extensions": [
-      "./src/index.ts"
-    ]
-  },
-  "optionalDependencies": {
-    "glimpseui": "^0.8.1"
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "build": "npm run build -w @bobrossthepainter/glimpse-relay-client",
+    "check": "npm run build && npm run check --workspaces --if-present",
+    "relay": "npm run relay -w @bobrossthepainter/glimpse-relay --",
+    "relay:install": "npm run relay:install -w @bobrossthepainter/glimpse-relay --",
+    "relay:uninstall": "npm run relay:uninstall -w @bobrossthepainter/glimpse-relay --",
+    "relay:status": "npm run relay:status -w @bobrossthepainter/glimpse-relay --",
+    "relay:env": "npm run relay:env -w @bobrossthepainter/glimpse-relay --",
+    "prepare": "node ./scripts/prepare.mjs",
+    "publish:packages": "npm publish -w @bobrossthepainter/glimpse-relay-client && npm publish -w @bobrossthepainter/glimpse-relay && npm publish -w @bobrossthepainter/pi-diff-view"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
