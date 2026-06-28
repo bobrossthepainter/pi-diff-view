@@ -69,8 +69,6 @@ npm run relay:env
 npm run relay:uninstall
 ```
 
-The old `bridge:*` scripts and `PI_DIFF_REVIEW_BRIDGE*` / `PI_DIFF_VIEW_BRIDGE*` env vars still work as aliases.
-
 ### Using glimpse-relay for other Glimpse UIs
 
 The relay protocol is generic: clients send `open`, `send`, `set-html`, `show`, `load-file`, `get-info`, `follow-cursor`, and `close` JSON-lines messages; the host forwards Glimpse `ready`, `message`, `info`, `closed`, and `error` events back. The diff review window uses `src/glimpse-relay.ts`, which exposes a Glimpse-like `open()` / `openGlimpseWindow()` helper.

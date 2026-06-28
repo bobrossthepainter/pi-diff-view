@@ -9,18 +9,11 @@
     "relay:uninstall": "node ./scripts/glimpse-relay-launch-agent.mjs uninstall",
     "relay:status": "node ./scripts/glimpse-relay-launch-agent.mjs status",
     "relay:env": "node ./scripts/glimpse-relay-launch-agent.mjs env",
-    "bridge": "npm run relay --",
-    "bridge:install": "npm run relay:install --",
-    "bridge:uninstall": "npm run relay:uninstall --",
-    "bridge:status": "npm run relay:status --",
-    "bridge:env": "npm run relay:env --",
     "check": "tsgo --noEmit",
     "prepare": "node ./scripts/prepare.mjs"
   },
   "bin": {
-    "glimpse-relay": "./bin/glimpse-relay.mjs",
-    "pi-diff-review-bridge": "./bin/pi-diff-review-bridge.mjs",
-    "pi-diff-view-bridge": "./bin/pi-diff-review-bridge.mjs"
+    "glimpse-relay": "./bin/glimpse-relay.mjs"
   },
   "pi": {
     "extensions": [

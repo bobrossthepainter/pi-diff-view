@@ -68,11 +68,7 @@ function envValue(...names: string[]): string | undefined {
 }
 
 function relayEnvValue(name: "" | "_HOST" | "_PORT" | "_TIMEOUT_MS" | "_TOKEN" | "_TOKEN_FILE"): string | undefined {
-  return envValue(
-    `GLIMPSE_RELAY${name}`,
-    `PI_DIFF_REVIEW_BRIDGE${name}`,
-    `PI_DIFF_VIEW_BRIDGE${name}`,
-  );
+  return envValue(`GLIMPSE_RELAY${name}`);
 }
 
 function tokenFromEnv(): string | undefined {

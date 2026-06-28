@@ -17,10 +17,7 @@ const plistPath = join(launchAgentsDir, `${LABEL}.plist`);
 const legacyPlistPath = join(launchAgentsDir, `${LEGACY_LABEL}.plist`);
 const defaultTokenPath = join(home, ".glimpse-relay-token");
 const legacyTokenPath = join(home, ".pi-diff-review-bridge-token");
-const tokenPath = process.env.GLIMPSE_RELAY_TOKEN_FILE
-  || process.env.PI_DIFF_REVIEW_BRIDGE_TOKEN_FILE
-  || process.env.PI_DIFF_VIEW_BRIDGE_TOKEN_FILE
-  || defaultTokenPath;
+const tokenPath = process.env.GLIMPSE_RELAY_TOKEN_FILE || defaultTokenPath;
 
 function usage() {
   console.log(`glimpse-relay launch agent
@@ -69,7 +66,7 @@ function parsePort(value) {
 
 function parseArgs(argv) {
   const [command = "help", ...rest] = argv;
-  let port = parsePort(envValue("GLIMPSE_RELAY_PORT", "PI_DIFF_REVIEW_BRIDGE_PORT", "PI_DIFF_VIEW_BRIDGE_PORT") || String(DEFAULT_PORT));
+  let port = parsePort(envValue("GLIMPSE_RELAY_PORT") || String(DEFAULT_PORT));
 
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];

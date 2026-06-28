@@ -24,8 +24,6 @@ Container-side environment:
   GLIMPSE_RELAY=host.docker.internal:7777
   GLIMPSE_RELAY_TOKEN=<same token>
   # or GLIMPSE_RELAY_TOKEN_FILE=/path/to/token-file
-
-Backcompat: PI_DIFF_REVIEW_BRIDGE* and PI_DIFF_VIEW_BRIDGE* env vars are also accepted.
 `);
 }
 
@@ -38,11 +36,7 @@ function envValue(...names) {
 }
 
 function relayEnvValue(name) {
-  return envValue(
-    `GLIMPSE_RELAY${name}`,
-    `PI_DIFF_REVIEW_BRIDGE${name}`,
-    `PI_DIFF_VIEW_BRIDGE${name}`,
-  );
+  return envValue(`GLIMPSE_RELAY${name}`);
 }
 
 function readArgValue(args, index, flag) {
