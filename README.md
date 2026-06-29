@@ -62,7 +62,7 @@ Install the pi extension after configuring npm to use GitHub Packages for the sc
 pi install npm:@bobrossthepainter/pi-diff-view
 ```
 
-Then run `/diff-view` or `/diff-review` in pi.
+Then run `/diff-view` in pi.
 
 ## Development
 

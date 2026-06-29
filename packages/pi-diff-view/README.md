@@ -14,7 +14,6 @@ Requires `@bobrossthepainter/glimpse-relay` running on the native macOS host whe
 ## Commands
 
 - `/diff-view`
-- `/diff-review`
 
 The window lets you review `git diff`, last commit, historical commits, and all files; draft comments; then inserts the resulting review prompt into the pi editor.
 
