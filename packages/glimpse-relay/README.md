@@ -4,6 +4,15 @@ Host-side relay for opening native [Glimpse](https://github.com/hazat/glimpse) w
 
 ## macOS host setup
 
+Directly with `npx`:
+
+```bash
+npm config set @bobrossthepainter:registry https://npm.pkg.github.com
+npx @bobrossthepainter/glimpse-relay install
+```
+
+Or install globally:
+
 ```bash
 npm config set @bobrossthepainter:registry https://npm.pkg.github.com
 npm install -g @bobrossthepainter/glimpse-relay

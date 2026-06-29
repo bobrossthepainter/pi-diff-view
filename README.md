@@ -25,8 +25,11 @@ npm login --scope=@bobrossthepainter --registry=https://npm.pkg.github.com
 ## Host setup on macOS
 
 ```bash
+# one-time auto-start setup, no global install needed
+npx @bobrossthepainter/glimpse-relay install
+
+# or install globally
 npm install -g @bobrossthepainter/glimpse-relay
-# one-time auto-start setup
 glimpse-relay install
 ```
 

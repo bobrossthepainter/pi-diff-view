@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const LABEL = "dev.glimpse-relay";
 const DEFAULT_PORT = 7777;
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const requireFromHere = createRequire(import.meta.url);
 const home = os.homedir();
 const launchAgentsDir = join(home, "Library", "LaunchAgents");
 const logsDir = join(home, "Library", "Logs");
@@ -124,11 +126,24 @@ function ensureTokenFile() {
   chmodSync(tokenPath, 0o600);
 }
 
+function resolveGlimpseDir() {
+  try {
+    return dirname(dirname(requireFromHere.resolve("glimpseui")));
+  } catch {
+    return null;
+  }
+}
+
 function ensureGlimpseBuild() {
-  const glimpseDir = join(root, "node_modules", "glimpseui");
-  if (!existsSync(glimpseDir)) {
+  let glimpseDir = resolveGlimpseDir();
+  if (glimpseDir == null) {
     console.log("Installing host dependencies...");
     run("npm", ["install"]);
+    glimpseDir = resolveGlimpseDir();
+  }
+
+  if (glimpseDir == null) {
+    throw new Error("Could not resolve glimpseui after installing dependencies.");
   }
 
   const macHost = join(glimpseDir, "src", "glimpse");
