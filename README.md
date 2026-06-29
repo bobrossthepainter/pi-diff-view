@@ -1,12 +1,18 @@
 # pi-diff-view
 
-Monorepo for native Glimpse UI relay support and the pi diff review extension.
+Monorepo for native Glimpse UI relay support and the pi diff view extension.
+
+## Origin and purpose
+
+The `@bobrossthepainter/pi-diff-view` pi extension is based on Mario Zechner's original [`pi-diff-review`](https://github.com/badlogic/pi-diff-review). This repo takes over that idea and extends it with Glimpse UI support over a relay.
+
+The adaptation is intended for users who run pi somewhere other than their native UI host — for example in Docker, a VM, or a remote environment — and want the native review window to appear on their local macOS host.
 
 ## Packages
 
 - `@bobrossthepainter/glimpse-relay` — host-side CLI/LaunchAgent. Runs on native macOS and opens real Glimpse windows.
 - `@bobrossthepainter/glimpse-relay-client` — pure Node client library for containerized tools/extensions.
-- `@bobrossthepainter/pi-diff-view` — pi extension that uses the client library to show a native diff review UI.
+- `@bobrossthepainter/pi-diff-view` — pi extension, adapted from Mario Zechner's original `pi-diff-review`, that uses the client library to show a native diff view UI from Docker/VM/remote pi sessions.
 
 GitHub Packages registry mapping (also committed in `.npmrc` for repo-local commands):
 

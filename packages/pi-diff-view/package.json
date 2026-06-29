@@ -2,12 +2,18 @@
   "name": "@bobrossthepainter/pi-diff-view",
   "version": "0.2.0",
   "type": "module",
-  "description": "Pi extension for native diff review windows",
+  "description": "Pi diff view extension adapted from Mario Zechner's pi-diff-review with Glimpse relay support",
   "keywords": [
     "pi-package",
     "pi-extension",
     "diff-view",
     "glimpse-relay"
+  ],
+  "contributors": [
+    {
+      "name": "Mario Zechner",
+      "url": "https://github.com/badlogic"
+    }
   ],
   "repository": {
     "type": "git",
