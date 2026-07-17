@@ -1,6 +1,6 @@
 {
   "name": "@bobrossthepainter/pi-diff-view",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "description": "Pi diff view extension adapted from Mario Zechner's pi-diff-review with Glimpse relay support",
   "keywords": [
@@ -34,7 +34,7 @@
     "check": "tsgo --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@bobrossthepainter/glimpse-relay-client": "^0.2.1"
+    "@bobrossthepainter/glimpse-relay-client": "^0.2.2"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

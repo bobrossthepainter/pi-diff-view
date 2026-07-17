@@ -17,6 +17,7 @@ const state = {
   reviewedFiles: {},
   scrollPositions: {},
   sidebarCollapsed: false,
+  sidebarWidth: 280,
   fileFilter: "",
   selectedCommitSha: reviewData.commits?.[0]?.sha || null,
   fileContents: {},
@@ -25,6 +26,7 @@ const state = {
 };
 
 const sidebarEl = document.getElementById("sidebar");
+const sidebarResizeHandleEl = document.getElementById("sidebar-resize-handle");
 const sidebarTitleEl = document.getElementById("sidebar-title");
 const sidebarSearchInputEl = document.getElementById("sidebar-search-input");
 const toggleSidebarButton = document.getElementById("toggle-sidebar-button");
@@ -266,6 +268,32 @@ function getFilteredFiles() {
     .map((entry) => entry.file);
 }
 
+function compactDirectoryNode(node) {
+  let label = node.label || node.name;
+
+  while (node.children.size === 1) {
+    const onlyChild = node.children.values().next().value;
+    if (onlyChild.kind !== "dir") break;
+
+    label = `${label}.${onlyChild.label || onlyChild.name}`;
+    node.label = label;
+    node.path = onlyChild.path;
+    node.children = onlyChild.children;
+  }
+}
+
+function compactJavaDirectoryPaths(node, insideJavaDirectory = false) {
+  for (const child of node.children.values()) {
+    if (child.kind !== "dir") continue;
+
+    // Keep the source-root directory itself visible, then use Java package
+    // notation for every uninterrupted directory chain below it.
+    const childIsInsideJavaDirectory = insideJavaDirectory || child.name === "java";
+    if (insideJavaDirectory) compactDirectoryNode(child);
+    compactJavaDirectoryPaths(child, childIsInsideJavaDirectory);
+  }
+}
+
 function buildTree(files) {
   const root = { name: "", path: "", kind: "dir", children: new Map(), file: null };
   for (const file of files) {
@@ -290,6 +318,7 @@ function buildTree(files) {
       if (isLeaf) node.file = file;
     }
   }
+  compactJavaDirectoryPaths(root);
   return root;
 }
 
@@ -389,7 +418,7 @@ function openFile(fileId) {
 function renderTreeNode(node, depth) {
   const children = [...node.children.values()].sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
-    return a.name.localeCompare(b.name);
+    return (a.label || a.name).localeCompare(b.label || b.name);
   });
 
   const indentPx = 12;
@@ -399,13 +428,13 @@ function renderTreeNode(node, depth) {
       const collapsed = state.collapsedDirs[child.path] === true;
       const row = document.createElement("button");
       row.type = "button";
-      row.className = "group flex w-full items-center gap-1.5 px-2 py-1 text-left text-[13px] text-[#c9d1d9] hover:bg-[#21262d]";
+      row.className = "group flex w-max min-w-full items-center gap-1.5 px-2 py-1 text-left text-[13px] text-[#c9d1d9] hover:bg-[#21262d]";
       row.style.paddingLeft = `${depth * indentPx + 8}px`;
       row.innerHTML = `
         <svg class="h-4 w-4 shrink-0 text-[#8b949e] transition-transform ${collapsed ? "-rotate-90" : ""}" viewBox="0 0 16 16" fill="currentColor">
           <path d="M12.78 6.22a.749.749 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.06 0L3.22 7.28a.749.749 0 0 1 1.06-1.06L8 9.939l3.72-3.719a.749.749 0 0 1 1.06 0Z"></path>
         </svg>
-        <span class="truncate">${escapeHtml(child.name)}</span>
+        <span class="whitespace-nowrap">${escapeHtml(child.label || child.name)}</span>
       `;
       row.addEventListener("click", () => {
         state.collapsedDirs[child.path] = !collapsed;
@@ -426,14 +455,14 @@ function renderTreeNode(node, depth) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
-      "group flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[13px]",
+      "group flex w-max min-w-full items-center justify-between gap-2 px-2 py-1 text-left text-[13px]",
       file.id === state.activeFileId ? "bg-[#373e47] text-white" : reviewed ? "text-[#c9d1d9] hover:bg-[#21262d]" : "text-[#8b949e] hover:bg-[#21262d] hover:text-[#c9d1d9]",
     ].join(" ");
     button.style.paddingLeft = `${(depth * indentPx) + 26}px`;
     button.innerHTML = `
-      <span class="flex min-w-0 items-center gap-1.5 truncate ${file.id === state.activeFileId ? "font-medium" : ""}">
+      <span class="flex items-center gap-1.5 whitespace-nowrap ${file.id === state.activeFileId ? "font-medium" : ""}">
         <span class="shrink-0 text-[10px] ${reviewed ? "text-[#3fb950]" : errored ? "text-red-400" : loading ? "text-[#58a6ff]" : "text-transparent"}">${reviewed ? "●" : errored ? "!" : loading ? "…" : "●"}</span>
-        <span class="truncate">${escapeHtml(child.name)}</span>
+        <span class="whitespace-nowrap">${escapeHtml(child.name)}</span>
       </span>
       <span class="flex shrink-0 items-center gap-1.5">
         ${count > 0 ? `<span class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#1f2937] px-1 text-[10px] font-medium text-[#c9d1d9]">${count}</span>` : ""}
@@ -459,16 +488,16 @@ function renderSearchResults(files) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = [
-      "group flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left",
+      "group flex w-max min-w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left",
       file.id === state.activeFileId ? "bg-[#373e47] text-white" : "text-[#c9d1d9] hover:bg-[#21262d]",
     ].join(" ");
     button.innerHTML = `
-      <span class="min-w-0 flex-1">
-        <span class="flex items-center gap-1.5">
+      <span class="flex-1 whitespace-nowrap">
+        <span class="flex items-center gap-1.5 whitespace-nowrap">
           <span class="shrink-0 text-[10px] ${reviewed ? "text-[#3fb950]" : errored ? "text-red-400" : loading ? "text-[#58a6ff]" : "text-transparent"}">${reviewed ? "●" : errored ? "!" : loading ? "…" : "●"}</span>
-          <span class="truncate text-[13px] ${file.id === state.activeFileId ? "font-medium" : ""}">${escapeHtml(baseName)}</span>
+          <span class="whitespace-nowrap text-[13px] ${file.id === state.activeFileId ? "font-medium" : ""}">${escapeHtml(baseName)}</span>
         </span>
-        <span class="mt-0.5 block truncate pl-[14px] text-[11px] ${file.id === state.activeFileId ? "text-[#c9d1d9]" : "text-review-muted"}">${escapeHtml(parentPath || path)}</span>
+        <span class="mt-0.5 block whitespace-nowrap pl-[14px] text-[11px] ${file.id === state.activeFileId ? "text-[#c9d1d9]" : "text-review-muted"}">${escapeHtml(parentPath || path)}</span>
       </span>
       <span class="flex shrink-0 items-center gap-1.5">
         ${count > 0 ? `<span class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#1f2937] px-1 text-[10px] font-medium text-[#c9d1d9]">${count}</span>` : ""}
@@ -480,14 +509,51 @@ function renderSearchResults(files) {
   });
 }
 
+function getMaximumSidebarWidth() {
+  return Math.max(180, Math.floor(window.innerWidth * 0.75));
+}
+
 function updateSidebarLayout() {
   const collapsed = state.sidebarCollapsed;
-  sidebarEl.style.width = collapsed ? "0px" : "280px";
-  sidebarEl.style.minWidth = collapsed ? "0px" : "280px";
-  sidebarEl.style.flexBasis = collapsed ? "0px" : "280px";
+  state.sidebarWidth = Math.max(180, Math.min(state.sidebarWidth, getMaximumSidebarWidth()));
+  const width = collapsed ? 0 : state.sidebarWidth;
+  sidebarEl.style.width = `${width}px`;
+  sidebarEl.style.minWidth = `${width}px`;
+  sidebarEl.style.flexBasis = `${width}px`;
   sidebarEl.style.borderRightWidth = collapsed ? "0px" : "1px";
   sidebarEl.style.pointerEvents = collapsed ? "none" : "auto";
+  sidebarResizeHandleEl.style.display = collapsed ? "none" : "block";
+  sidebarResizeHandleEl.setAttribute("aria-valuemax", String(getMaximumSidebarWidth()));
+  sidebarResizeHandleEl.setAttribute("aria-valuenow", String(state.sidebarWidth));
   toggleSidebarButton.textContent = collapsed ? "Show sidebar" : "Hide sidebar";
+}
+
+function beginSidebarResize(event) {
+  if (state.sidebarCollapsed || event.button !== 0) return;
+  event.preventDefault();
+
+  const startX = event.clientX;
+  const startWidth = state.sidebarWidth;
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
+
+  const resize = (moveEvent) => {
+    state.sidebarWidth = Math.max(180, Math.min(startWidth + moveEvent.clientX - startX, getMaximumSidebarWidth()));
+    updateSidebarLayout();
+    requestAnimationFrame(layoutEditor);
+  };
+
+  const stop = () => {
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    window.removeEventListener("pointermove", resize);
+    window.removeEventListener("pointerup", stop);
+    window.removeEventListener("pointercancel", stop);
+  };
+
+  window.addEventListener("pointermove", resize);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
 }
 
 function updateScopeButtons() {
@@ -1131,6 +1197,21 @@ toggleSidebarButton.addEventListener("click", () => {
     layoutEditor();
     setTimeout(layoutEditor, 50);
   });
+});
+
+sidebarResizeHandleEl.addEventListener("pointerdown", beginSidebarResize);
+sidebarResizeHandleEl.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  const delta = event.key === "ArrowLeft" ? -20 : 20;
+  state.sidebarWidth = Math.max(180, Math.min(state.sidebarWidth + delta, getMaximumSidebarWidth()));
+  updateSidebarLayout();
+  requestAnimationFrame(layoutEditor);
+});
+
+window.addEventListener("resize", () => {
+  updateSidebarLayout();
+  requestAnimationFrame(layoutEditor);
 });
 
 sidebarSearchInputEl.addEventListener("input", () => {

@@ -142,7 +142,7 @@
   </div>
 
   <div id="content-layout" class="flex min-h-0 flex-1">
-    <aside id="sidebar" class="flex min-h-0 shrink-0 flex-col border-r border-review-border bg-[#0d1117]" style="width: 280px; min-width: 280px; flex-basis: 280px; overflow: hidden;">
+    <aside id="sidebar" class="relative flex min-h-0 shrink-0 flex-col border-r border-review-border bg-[#0d1117]" style="width: 280px; min-width: 280px; flex-basis: 280px; overflow: hidden;">
     <div class="border-b border-review-border px-4 py-3">
       <div class="mb-2 flex items-center justify-between gap-2">
         <div id="sidebar-title" class="text-[11px] font-semibold uppercase tracking-wider text-review-muted">Files</div>
@@ -157,7 +157,8 @@
       <select id="commit-select" class="mb-3 hidden w-full rounded-md border border-review-border bg-review-panel px-2 py-2 text-xs text-review-text outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"></select>
       <input id="sidebar-search-input" type="text" spellcheck="false" autocomplete="off" placeholder="Search files" class="w-full rounded-md border border-review-border bg-review-panel px-3 py-2 text-sm text-review-text outline-none placeholder:text-review-muted focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
     </div>
-    <div id="file-tree" class="scrollbar-thin min-h-0 flex-1 overflow-auto px-2 pb-2"></div>
+    <div id="file-tree" class="scrollbar-thin min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain px-2 pb-2"></div>
+    <div id="sidebar-resize-handle" role="separator" aria-label="Resize explorer" aria-orientation="vertical" aria-valuemin="180" aria-valuenow="280" tabindex="0" class="absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize touch-none bg-transparent outline-none hover:bg-[#58a6ff] focus:bg-[#58a6ff]"></div>
   </aside>
 
     <main id="main-pane" class="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1117]">

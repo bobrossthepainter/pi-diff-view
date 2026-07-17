@@ -1,6 +1,6 @@
 {
   "name": "@bobrossthepainter/glimpse-relay",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "description": "Host-side relay for opening native Glimpse windows from Docker or VM clients",
   "keywords": [
