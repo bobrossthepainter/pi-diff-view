@@ -22,5 +22,8 @@
     "@typescript/native-preview": "^7.0.0-dev.20260313.1",
     "husky": "^9.1.7",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "glimpseui": "^0.8.1"
   }
 }
