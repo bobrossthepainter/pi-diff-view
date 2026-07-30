@@ -80,6 +80,21 @@ export interface GlimpseRelayWindow {
     getInfo(): void;
     followCursor(enabled: boolean, anchor?: CursorAnchor, mode?: FollowMode): void;
 }
+/** A Glimpse window whose page and same-origin network traffic are relayed to a client-side URL. */
+export interface GlimpseRelayedUrl extends GlimpseRelayWindow {
+    readonly targetUrl: string;
+    readonly proxyUrl: string | null;
+}
+/** Default loopback targets plus exact additional hostnames from GLIMPSE_RELAY_CLIENT_ALLOWED_HOSTS. */
+export declare function getRelayClientAllowedHosts(): string[];
 export declare function openGlimpseWindow(html: string, options?: GlimpseRelayOpenOptions): Promise<GlimpseRelayWindow>;
+/**
+ * Open a client-reachable HTTP(S) URL in host-side Glimpse.
+ *
+ * The host relay exposes a temporary loopback reverse proxy. HTTP, streaming
+ * responses (including SSE), and WebSocket traffic are carried over the relay
+ * and connected to the target by this client process.
+ */
+export declare function openRelayedUrl(url: string | URL, options?: GlimpseRelayOpenOptions): Promise<GlimpseRelayedUrl>;
 export { openGlimpseWindow as open };
 //# sourceMappingURL=index.d.ts.map

@@ -11,8 +11,12 @@ The adaptation is intended for users who run pi somewhere other than their nativ
 ## Packages
 
 - `@bobrossthepainter/glimpse-relay` — host-side CLI/LaunchAgent. Runs on native macOS and opens real Glimpse windows.
-- `@bobrossthepainter/glimpse-relay-client` — pure Node client library for containerized tools/extensions.
+- `@bobrossthepainter/glimpse-relay-client` — pure Node client library for containerized tools/extensions; includes `openRelayedUrl()` and the `glimpse-relay-open` CLI for tunnelling hosted web apps.
 - `@bobrossthepainter/pi-diff-view` — pi extension, adapted from Mario Zechner's original `pi-diff-review`, that uses the client library to show a native diff view UI from Docker/VM/remote pi sessions.
+
+## Documentation
+
+- [Technical architecture](docs/technical-architecture.md) — component responsibilities, session setup, and HTTP/SSE/WebSocket forwarding internals.
 
 GitHub Packages registry mapping (also committed in `.npmrc` for repo-local commands):
 
@@ -72,6 +76,14 @@ pi install npm:@bobrossthepainter/pi-diff-view
 ```
 
 Then run `/diff-view` in pi.
+
+To open a web service hosted in the container through the relay:
+
+```bash
+glimpse-relay-open http://localhost:9000/welcome
+```
+
+Only `localhost` and `127.0.0.1` are allowed as target hosts by default. Add exact hostnames with `GLIMPSE_RELAY_CLIENT_ALLOWED_HOSTS=host1,host2`.
 
 ## Development
 

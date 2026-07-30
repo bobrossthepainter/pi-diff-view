@@ -1,11 +1,15 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
+import http, { type ClientRequest, type IncomingHttpHeaders } from "node:http";
+import https from "node:https";
 import net from "node:net";
 
 const DEFAULT_CONTAINER_RELAY_HOST = "host.docker.internal";
 const DEFAULT_LOCAL_RELAY_HOST = "127.0.0.1";
 const DEFAULT_RELAY_PORT = 7777;
 const DEFAULT_RELAY_TIMEOUT_MS = 2500;
+const DEFAULT_ALLOWED_TARGET_HOSTS = ["localhost", "127.0.0.1"] as const;
+const ALLOWED_HOSTS_ENV = "GLIMPSE_RELAY_CLIENT_ALLOWED_HOSTS";
 
 export type FollowMode = "snap" | "spring";
 export type CursorAnchor = "top-left" | "top-right" | "right" | "bottom-right" | "bottom-left" | "left";
@@ -95,6 +99,12 @@ export interface GlimpseRelayWindow {
   followCursor(enabled: boolean, anchor?: CursorAnchor, mode?: FollowMode): void;
 }
 
+/** A Glimpse window whose page and same-origin network traffic are relayed to a client-side URL. */
+export interface GlimpseRelayedUrl extends GlimpseRelayWindow {
+  readonly targetUrl: string;
+  readonly proxyUrl: string | null;
+}
+
 interface RelayConfig {
   host: string;
   port: number;
@@ -103,13 +113,22 @@ interface RelayConfig {
   source: string;
 }
 
+type ProxyHeaders = Record<string, string | string[] | undefined>;
+
 type RelayServerMessage =
-  | { type: "opened" }
+  | { type: "opened"; proxyUrl?: string }
   | { type: "ready"; info: GlimpseInfo }
   | { type: "message"; data: unknown }
   | { type: "info"; info: GlimpseInfo }
   | { type: "closed" }
-  | { type: "error"; message?: string; stack?: string };
+  | { type: "error"; message?: string; stack?: string }
+  | { type: "proxy-request"; id: string; method: string; url: string; headers: ProxyHeaders; proxyOrigin: string }
+  | { type: "proxy-request-data"; id: string; data: string }
+  | { type: "proxy-request-end"; id: string }
+  | { type: "proxy-request-abort"; id: string }
+  | { type: "proxy-upgrade"; id: string; method: string; url: string; headers: ProxyHeaders; proxyOrigin: string; head?: string }
+  | { type: "proxy-upgrade-data"; id: string; data: string }
+  | { type: "proxy-upgrade-close"; id: string };
 
 function parseBoolean(value: string): boolean | null {
   const normalized = value.trim().toLowerCase();
@@ -154,6 +173,46 @@ function parsePositiveInteger(value: string | undefined, fallback: number, label
 
 function parsePort(value: string | undefined, fallback: number): number {
   return parsePositiveInteger(value, fallback, "Glimpse relay port", 65535);
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname.trim().toLowerCase().replace(/\.$/, "");
+}
+
+/** Default loopback targets plus exact additional hostnames from GLIMPSE_RELAY_CLIENT_ALLOWED_HOSTS. */
+export function getRelayClientAllowedHosts(): string[] {
+  const hosts = new Set<string>(DEFAULT_ALLOWED_TARGET_HOSTS);
+  for (const entry of envValue(ALLOWED_HOSTS_ENV)?.split(",") ?? []) {
+    const hostname = normalizeHostname(entry);
+    if (hostname.length > 0) hosts.add(hostname);
+  }
+  return [...hosts];
+}
+
+function parseAndValidateTargetUrl(value: string | URL): URL {
+  let target: URL;
+  try {
+    target = value instanceof URL ? new URL(value.href) : new URL(value);
+  } catch {
+    throw new Error(`Invalid relayed URL: ${String(value)}`);
+  }
+
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    throw new Error(`Unsupported relayed URL protocol '${target.protocol}'. Only http: and https: are supported.`);
+  }
+  if (target.username || target.password) {
+    throw new Error("Relayed URLs must not contain embedded credentials.");
+  }
+
+  const hostname = normalizeHostname(target.hostname);
+  const allowedHosts = getRelayClientAllowedHosts();
+  if (!allowedHosts.includes(hostname)) {
+    throw new Error(
+      `Refusing to relay disallowed host '${target.hostname}'. Allowed hosts: ${allowedHosts.join(", ")}. ` +
+      `Add exact hostnames with ${ALLOWED_HOSTS_ENV}=host1,host2.`,
+    );
+  }
+  return target;
 }
 
 function isProbablyContainer(): boolean {
@@ -213,8 +272,9 @@ function getRelayConfig(): RelayConfig {
   };
 }
 
-function writeJsonLine(socket: net.Socket, message: unknown): void {
-  socket.write(`${JSON.stringify(message)}\n`);
+function writeJsonLine(socket: net.Socket, message: unknown): boolean {
+  if (socket.destroyed) return false;
+  return socket.write(`${JSON.stringify(message)}\n`);
 }
 
 function connectToRelay(config: RelayConfig): Promise<net.Socket> {
@@ -256,20 +316,80 @@ function connectToRelay(config: RelayConfig): Promise<net.Socket> {
   });
 }
 
-class RemoteGlimpseWindow extends EventEmitter implements GlimpseRelayWindow {
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+]);
+
+function forwardedHeaders(headers: ProxyHeaders, target: URL, proxyOrigin: string, upgrade = false): ProxyHeaders {
+  const result: ProxyHeaders = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const lower = name.toLowerCase();
+    if (lower === "host" || (!upgrade && (HOP_BY_HOP_HEADERS.has(lower) || lower === "upgrade"))) continue;
+    result[name] = value;
+  }
+  result.host = target.host;
+
+  const origin = result.origin;
+  if (typeof origin === "string" && origin === proxyOrigin) result.origin = target.origin;
+  const referer = result.referer;
+  if (typeof referer === "string" && referer.startsWith(`${proxyOrigin}/`)) {
+    result.referer = `${target.origin}${referer.slice(proxyOrigin.length)}`;
+  }
+  return result;
+}
+
+function responseHeaders(headers: IncomingHttpHeaders): ProxyHeaders {
+  const result: ProxyHeaders = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (value !== undefined) result[name] = value;
+  }
+  return result;
+}
+
+function requestUrl(target: URL, requestPath: string): URL {
+  const resolved = new URL(requestPath, target.origin);
+  if (resolved.origin !== target.origin) {
+    throw new Error(`Refusing cross-origin proxy request to ${resolved.origin}`);
+  }
+  return resolved;
+}
+
+type PendingRequest = { request: ClientRequest };
+type PendingUpgrade = { request: ClientRequest; socket?: net.Socket; queued: Buffer[] };
+
+class RemoteGlimpseWindow extends EventEmitter implements GlimpseRelayedUrl {
   #socket: net.Socket;
   #buffer = "";
   #closed = false;
   #info: GlimpseInfo | null = null;
+  #target: URL | null;
+  #proxyUrl: string | null = null;
+  #requests = new Map<string, PendingRequest>();
+  #upgrades = new Map<string, PendingUpgrade>();
 
-  constructor(socket: net.Socket) {
+  constructor(socket: net.Socket, target?: URL) {
     super();
     this.#socket = socket;
+    this.#target = target ?? null;
     this.on("error", () => {});
 
     socket.on("data", (chunk) => this.#handleData(chunk));
     socket.on("close", () => this.#emitClosed());
     socket.on("error", (error) => this.#emitError(error));
+  }
+
+  get targetUrl(): string {
+    return this.#target?.href ?? "";
+  }
+
+  get proxyUrl(): string | null {
+    return this.#proxyUrl;
   }
 
   send(js: string): void {
@@ -287,6 +407,7 @@ class RemoteGlimpseWindow extends EventEmitter implements GlimpseRelayWindow {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
+    this.#destroyProxyConnections();
     if (!this.#socket.destroyed) {
       this.#socket.end(`${JSON.stringify({ type: "close" })}\n`);
     }
@@ -309,9 +430,9 @@ class RemoteGlimpseWindow extends EventEmitter implements GlimpseRelayWindow {
     this.#write({ type: "follow-cursor", enabled, anchor, mode });
   }
 
-  #write(message: unknown): void {
-    if (this.#closed || this.#socket.destroyed) return;
-    writeJsonLine(this.#socket, message);
+  #write(message: unknown): boolean {
+    if (this.#closed || this.#socket.destroyed) return false;
+    return writeJsonLine(this.#socket, message);
   }
 
   #handleData(chunk: Buffer): void {
@@ -334,42 +455,171 @@ class RemoteGlimpseWindow extends EventEmitter implements GlimpseRelayWindow {
 
   #handleMessage(message: RelayServerMessage): void {
     if (message.type === "opened") {
+      this.#proxyUrl = message.proxyUrl ?? null;
       this.emit("relay-opened");
       return;
     }
-
     if (message.type === "ready") {
       this.#info = message.info;
       this.emit("ready", message.info);
       return;
     }
-
     if (message.type === "message") {
       this.emit("message", message.data);
       return;
     }
-
     if (message.type === "info") {
       this.#info = message.info;
       this.emit("info", message.info);
       return;
     }
-
     if (message.type === "closed") {
       this.#emitClosed();
       return;
     }
-
     if (message.type === "error") {
       const error = new Error(message.message ?? "Glimpse relay error");
       if (message.stack != null) error.stack = message.stack;
       this.#emitError(error);
+      return;
     }
+
+    try {
+      if (message.type === "proxy-request") this.#startProxyRequest(message);
+      else if (message.type === "proxy-request-data") this.#requests.get(message.id)?.request.write(Buffer.from(message.data, "base64"));
+      else if (message.type === "proxy-request-end") this.#requests.get(message.id)?.request.end();
+      else if (message.type === "proxy-request-abort") this.#abortProxyRequest(message.id);
+      else if (message.type === "proxy-upgrade") this.#startProxyUpgrade(message);
+      else if (message.type === "proxy-upgrade-data") this.#writeProxyUpgrade(message.id, Buffer.from(message.data, "base64"));
+      else if (message.type === "proxy-upgrade-close") this.#closeProxyUpgrade(message.id);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const id = "id" in message ? message.id : undefined;
+      if (id) this.#write({ type: "proxy-error", id, message: detail });
+    }
+  }
+
+  #startProxyRequest(message: Extract<RelayServerMessage, { type: "proxy-request" }>): void {
+    const target = this.#requireTarget();
+    const url = requestUrl(target, message.url);
+    const transport = target.protocol === "https:" ? https : http;
+    const request = transport.request(url, {
+      method: message.method,
+      headers: forwardedHeaders(message.headers, target, message.proxyOrigin),
+    });
+    this.#requests.set(message.id, { request });
+
+    request.on("response", (response) => {
+      this.#write({
+        type: "proxy-response",
+        id: message.id,
+        statusCode: response.statusCode ?? 502,
+        statusMessage: response.statusMessage,
+        headers: responseHeaders(response.headers),
+      });
+      response.on("data", (chunk: Buffer) => {
+        const writable = this.#write({ type: "proxy-response-data", id: message.id, data: chunk.toString("base64") });
+        if (!writable) {
+          response.pause();
+          this.#socket.once("drain", () => response.resume());
+        }
+      });
+      response.on("end", () => {
+        this.#requests.delete(message.id);
+        this.#write({ type: "proxy-response-end", id: message.id });
+      });
+      response.on("aborted", () => {
+        this.#requests.delete(message.id);
+        this.#write({ type: "proxy-error", id: message.id, message: "Target response was aborted." });
+      });
+    });
+    request.on("error", (error) => {
+      this.#requests.delete(message.id);
+      this.#write({ type: "proxy-error", id: message.id, message: error.message });
+    });
+  }
+
+  #startProxyUpgrade(message: Extract<RelayServerMessage, { type: "proxy-upgrade" }>): void {
+    const target = this.#requireTarget();
+    const url = requestUrl(target, message.url);
+    const transport = target.protocol === "https:" ? https : http;
+    const request = transport.request(url, {
+      method: message.method,
+      headers: forwardedHeaders(message.headers, target, message.proxyOrigin, true),
+    });
+    const pending: PendingUpgrade = { request, queued: [] };
+    this.#upgrades.set(message.id, pending);
+    if (message.head) pending.queued.push(Buffer.from(message.head, "base64"));
+
+    request.on("upgrade", (response, socket, head) => {
+      pending.socket = socket;
+      this.#write({
+        type: "proxy-upgrade-response",
+        id: message.id,
+        statusCode: response.statusCode ?? 101,
+        statusMessage: response.statusMessage,
+        headers: responseHeaders(response.headers),
+        head: head.length > 0 ? head.toString("base64") : undefined,
+      });
+      for (const chunk of pending.queued) socket.write(chunk);
+      pending.queued = [];
+      socket.on("data", (chunk) => this.#write({ type: "proxy-upgrade-data", id: message.id, data: chunk.toString("base64") }));
+      socket.on("close", () => {
+        this.#upgrades.delete(message.id);
+        this.#write({ type: "proxy-upgrade-close", id: message.id });
+      });
+      socket.on("error", (error) => this.#write({ type: "proxy-error", id: message.id, message: error.message }));
+    });
+    request.on("response", (response) => {
+      response.resume();
+      this.#upgrades.delete(message.id);
+      this.#write({ type: "proxy-error", id: message.id, message: `Target refused WebSocket upgrade with HTTP ${response.statusCode ?? 500}.` });
+    });
+    request.on("error", (error) => {
+      this.#upgrades.delete(message.id);
+      this.#write({ type: "proxy-error", id: message.id, message: error.message });
+    });
+    request.end();
+  }
+
+  #writeProxyUpgrade(id: string, chunk: Buffer): void {
+    const pending = this.#upgrades.get(id);
+    if (!pending) return;
+    if (pending.socket) pending.socket.write(chunk);
+    else pending.queued.push(chunk);
+  }
+
+  #abortProxyRequest(id: string): void {
+    this.#requests.get(id)?.request.destroy();
+    this.#requests.delete(id);
+  }
+
+  #closeProxyUpgrade(id: string): void {
+    const pending = this.#upgrades.get(id);
+    pending?.socket?.destroy();
+    pending?.request.destroy();
+    this.#upgrades.delete(id);
+  }
+
+  #requireTarget(): URL {
+    if (!this.#target) throw new Error("No relayed target URL is configured.");
+    return this.#target;
+  }
+
+  #destroyProxyConnections(): void {
+    for (const pending of this.#requests.values()) pending.request.destroy();
+    this.#requests.clear();
+    for (const pending of this.#upgrades.values()) {
+      pending.socket?.destroy();
+      pending.request.destroy();
+    }
+    this.#upgrades.clear();
   }
 
   #emitClosed(): void {
     if (this.#closed) return;
     this.#closed = true;
+    this.#destroyProxyConnections();
     this.emit("closed");
   }
 
@@ -378,7 +628,12 @@ class RemoteGlimpseWindow extends EventEmitter implements GlimpseRelayWindow {
   }
 }
 
-async function openRemoteGlimpseWindow(html: string, options: GlimpseRelayOpenOptions, config: RelayConfig): Promise<GlimpseRelayWindow> {
+async function openRemoteGlimpseWindow(
+  html: string,
+  options: GlimpseRelayOpenOptions,
+  config: RelayConfig,
+  target?: URL,
+): Promise<RemoteGlimpseWindow> {
   let socket: net.Socket;
   try {
     socket = await connectToRelay(config);
@@ -387,7 +642,7 @@ async function openRemoteGlimpseWindow(html: string, options: GlimpseRelayOpenOp
     throw new Error(`Could not connect to Glimpse relay (${config.source}) at ${config.host}:${config.port}: ${message}`);
   }
 
-  const window = new RemoteGlimpseWindow(socket);
+  const window = new RemoteGlimpseWindow(socket, target);
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -407,12 +662,10 @@ async function openRemoteGlimpseWindow(html: string, options: GlimpseRelayOpenOp
       cleanup();
       resolve();
     };
-
     const onError = (error: Error): void => {
       cleanup();
       reject(error);
     };
-
     const onClosed = (): void => {
       cleanup();
       reject(new Error("Glimpse relay closed before opening a window."));
@@ -421,10 +674,17 @@ async function openRemoteGlimpseWindow(html: string, options: GlimpseRelayOpenOp
     window.once("relay-opened", onOpened);
     window.once("error", onError);
     window.once("closed", onClosed);
-    writeJsonLine(socket, { type: "open", token: config.token, html, options });
+    writeJsonLine(socket, target
+      ? { type: "open-url", token: config.token, url: target.href, options }
+      : { type: "open", token: config.token, html, options });
   });
 
   return window;
+}
+
+function withRelayHint(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(`${message}\nStart the host relay first, for example: glimpse-relay install or glimpse-relay --docker.`);
 }
 
 export async function openGlimpseWindow(html: string, options: GlimpseRelayOpenOptions = {}): Promise<GlimpseRelayWindow> {
@@ -432,8 +692,27 @@ export async function openGlimpseWindow(html: string, options: GlimpseRelayOpenO
   try {
     return await openRemoteGlimpseWindow(html, options, relayConfig);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${message}\nStart the host relay first, for example: glimpse-relay install or glimpse-relay --docker.`);
+    throw withRelayHint(error);
+  }
+}
+
+/**
+ * Open a client-reachable HTTP(S) URL in host-side Glimpse.
+ *
+ * The host relay exposes a temporary loopback reverse proxy. HTTP, streaming
+ * responses (including SSE), and WebSocket traffic are carried over the relay
+ * and connected to the target by this client process.
+ */
+export async function openRelayedUrl(
+  url: string | URL,
+  options: GlimpseRelayOpenOptions = {},
+): Promise<GlimpseRelayedUrl> {
+  const target = parseAndValidateTargetUrl(url);
+  const relayConfig = getRelayConfig();
+  try {
+    return await openRemoteGlimpseWindow("", options, relayConfig, target);
+  } catch (error) {
+    throw withRelayHint(error);
   }
 }
 
